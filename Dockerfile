@@ -2,7 +2,11 @@ FROM archlinux:latest
 
 RUN pacman-key --init
 
-RUN pacman -Syu --noconfirm
+# RUN echo 'Server = https://mirrors.ustc.edu.cn/archlinux/$repo/os/$arch' | tee /etc/pacman.d/mirrorlist
+
+RUN echo 'Server = https://mirror.nju.edu.cn/archlinux/$repo/os/$arch' | tee /etc/pacman.d/mirrorlist
+
+RUN pacman -Syyu --noconfirm
 
 RUN pacman -S --noconfirm gcc make perl wget git python
 

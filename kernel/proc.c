@@ -267,12 +267,25 @@ int fork(void) {
   return pid;
 }
 
+// 
+char* get_procstate_string(enum procstate state) {
+  switch (state) {
+    case UNUSED: return "unused";
+    case SLEEPING: return "sleep";
+    case RUNNABLE: return "runble";
+    case RUNNING: return "run";
+    case ZOMBIE: return "zombie";
+    default: return "unknown";
+  }
+}
+
+
 // Pass p's abandoned children to init.
 // Caller must hold p->lock.
 void reparent(struct proc *p) {
   struct proc *pp;
-
-  for (pp = proc; pp < &proc[NPROC]; pp++) {
+  int child_num;
+  for (pp = proc, child_num = 0; pp < &proc[NPROC]; pp++) {
     // this code uses pp->parent without holding pp->lock.
     // acquiring the lock first could cause a deadlock
     // if pp or a child of pp were also in exit()
@@ -281,7 +294,9 @@ void reparent(struct proc *p) {
       // pp->parent can't change between the check and the acquire()
       // because only the parent changes it, and we're the parent.
       acquire(&pp->lock);
+      exit_info("proc %d exit, child %d, pid %d, name %s, state %s\n", p->pid, child_num, pp->pid, pp->name, get_procstate_string(pp->state));
       pp->parent = initproc;
+      child_num++;
       // we should wake up init here, but that would require
       // initproc->lock, which would be a deadlock, since we hold
       // the lock on one of init's children (pp). this is why
@@ -329,6 +344,7 @@ void exit(int status) {
   // to a dead or wrong process; proc structs are never re-allocated
   // as anything else.
   acquire(&p->lock);
+  exit_info("proc %d exit, parent pid %d, name %s, state %s\n", p->pid, p->parent->pid, p->parent->name, get_procstate_string(p->parent->state));
   struct proc *original_parent = p->parent;
   release(&p->lock);
 
