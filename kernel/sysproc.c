@@ -7,7 +7,6 @@
 #include "spinlock.h"
 #include "proc.h"
 
-extern struct proc proc[NPROC];
 
 uint64 sys_exit(void) {
   int n;
