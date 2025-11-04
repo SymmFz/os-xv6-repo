@@ -9,7 +9,7 @@
 #include "riscv.h"
 #include "defs.h"
 
-void freerange(void *pa_start, void *pa_end);
+void freerange(void *pa_start, void *pa_end, int cpu_id);
 
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
@@ -39,18 +39,29 @@ kinit()
     initlock(&kmems[cpu_no].lock, kmem_lock_names[cpu_no]);
 
     void *pa_start = (void *)((char *)end + cpu_no * mem_per_cpu);
-    void *pa_end = (void *)((char *)pa_start + mem_per_cpu);
-    freerange(pa_start, pa_end);
+    void *pa_end = (cpu_no == NCPU - 1) ? (void*)PHYSTOP : (void *)((char *)pa_start + mem_per_cpu);
+    freerange(pa_start, pa_end, cpu_no);
   }
 }
 
 void
-freerange(void *pa_start, void *pa_end)
+freerange(void *pa_start, void *pa_end, int cpu_id)
 {
   char *p;
+  struct run *r;
   p = (char*)PGROUNDUP((uint64)pa_start);
-  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
-    kfree(p);
+  for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE) {
+
+    // Fill with junk to catch dangling refs.
+    memset(p, 1, PGSIZE);
+
+    r = (struct run*)p;
+
+    acquire(&kmems[cpu_id].lock);
+    r->next = kmems[cpu_id].freelist;
+    kmems[cpu_id].freelist = r;
+    release(&kmems[cpu_id].lock);
+  }
 }
 
 // Free the page of physical memory pointed at by v,
