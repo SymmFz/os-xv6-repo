@@ -379,3 +379,51 @@ int test_pagetable() {
   printf("test_pagetable: %d\n", satp != gsatp);
   return satp != gsatp;
 }
+
+// read pte and write to flags_str.
+static inline void get_pte_flags(pte_t *pte, char *flags_str) {
+  flags_str[0] = (*pte & PTE_R) ? 'r' : '-';
+  flags_str[1] = (*pte & PTE_W) ? 'w' : '-';
+  flags_str[2] = (*pte & PTE_X) ? 'x' : '-';
+  flags_str[3] = (*pte & PTE_U) ? 'u' : '-';
+  flags_str[4] = '\0';
+}
+
+static void vmprintwalk(pagetable_t pgtbl, int level, const char* prefix, uint64 va_base) {
+  for (int i = 0; i < 512; i++) {
+
+    pte_t pte = pgtbl[i];
+
+    // 页目录项
+    if ((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0) {
+
+      uint64 child_pa = PTE2PA(pte);
+      uint64 child_va = va_base | ((uint64)i << PXSHIFT(level));
+
+      printf("%sidx: %d: pa: %p, flags: ----\n", prefix, i, child_pa);
+
+      char new_prefix[512];
+      snprintf(new_prefix, 512, "%s   ||", prefix);
+      vmprintwalk((pagetable_t)child_pa, level - 1, new_prefix, child_va);
+
+    } else if (pte & PTE_V) {
+
+      // 页表项
+      uint64 pa = PTE2PA(pte);
+      uint64 va = va_base | ((uint64)i << PXSHIFT(level));
+      char flags_str[5]; get_pte_flags(&pte, flags_str);
+
+      printf("%sidx: %d: va: %p -> pa: %p, flags: %s\n", prefix, i, va, pa, flags_str);
+
+    }
+  }
+}
+
+// print a page table
+void vmprint(pagetable_t pgtbl) {
+  printf("page table %p\n", pgtbl);
+
+  char *prefix = "||";
+  vmprintwalk(pgtbl, 2, prefix, 0);
+}
+
