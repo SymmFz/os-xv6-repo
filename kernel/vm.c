@@ -461,6 +461,39 @@ int test_pagetable() {
   return satp != gsatp;
 }
 
+// sync user pagetale to process's k_pagetable
+void sync_pagetable(pagetable_t k_pagetable, const pagetable_t pagetable) {
+  if (k_pagetable == 0 || pagetable == 0) {
+    panic("sync_pagetable: invalid pagetable");
+  }
+
+  pte_t level2_pgtbl_pte0 = (pte_t)pagetable[0];
+
+  // user pagetable pte 0 should be valid.
+  if (!(level2_pgtbl_pte0 & PTE_V)) {
+    panic("sync_pagetable: user pagetable should be valid.");
+  }
+
+  pte_t k_level2_pgtbl_pte0 = (pte_t)k_pagetable[0];
+  // maybe need alloc
+  // 其实一定要（
+  if (!(k_level2_pgtbl_pte0 & PTE_V)) {
+    pagetable_t alloc_pagetable;
+    if ((alloc_pagetable = (pde_t*)kalloc()) == 0) {
+      panic("sync_pagetable: kalloc failed");
+    }
+    memset(alloc_pagetable, 0, PGSIZE);
+    k_pagetable[0] = PA2PTE(alloc_pagetable) | PTE_V;
+    k_level2_pgtbl_pte0 = (pte_t)k_pagetable[0];
+  }
+  
+  pagetable_t k_level1_pagetable = (pagetable_t)PTE2PA(k_level2_pgtbl_pte0);
+  pagetable_t level1_pagetable = (pagetable_t)PTE2PA(level2_pgtbl_pte0);
+
+  // 0xC000000 / 2^21 = 96
+  memmove(k_level1_pagetable, level1_pagetable, 96 * sizeof(pte_t));
+}
+
 // read pte and write to flags_str.
 static inline void get_pte_flags(pte_t *pte, char *flags_str) {
   flags_str[0] = (*pte & PTE_R) ? 'r' : '-';
@@ -498,38 +531,6 @@ static void vmprintwalk(pagetable_t pgtbl, int level, const char* prefix, uint64
 
     }
   }
-}
-
-// sync user pagetale to process's k_pagetable
-void sync_pagetable(pagetable_t k_pagetable, const pagetable_t pagetable) {
-  if (k_pagetable == 0 || pagetable == 0) {
-    panic("sync_pagetable: invalid pagetable");
-  }
-
-  pte_t level2_pgtbl_pte0 = (pte_t)pagetable[0];
-
-  // user pagetable pte 0 should be valid.
-  if (!(level2_pgtbl_pte0 & PTE_V)) {
-    panic("sync_pagetable: user pagetable should be valid.");
-  }
-
-  pte_t k_level2_pgtbl_pte0 = (pte_t)k_pagetable[0];
-  // maybe need alloc
-  if (!(k_level2_pgtbl_pte0 & PTE_V)) {
-    pagetable_t alloc_pagetable;
-    if ((alloc_pagetable = (pde_t*)kalloc()) == 0) {
-      panic("sync_pagetable: kalloc failed");
-    }
-    memset(alloc_pagetable, 0, PGSIZE);
-    k_pagetable[0] = PA2PTE(alloc_pagetable) | PTE_V;
-    k_level2_pgtbl_pte0 = (pte_t)k_pagetable[0];
-  }
-  
-  pagetable_t k_level1_pagetable = (pagetable_t)PTE2PA(k_level2_pgtbl_pte0);
-  pagetable_t level1_pagetable = (pagetable_t)PTE2PA(level2_pgtbl_pte0);
-
-  // 0xC000000 / 2^21 = 96
-  memmove(k_level1_pagetable, level1_pagetable, 96 * sizeof(pte_t));
 }
 
 // print a page table
