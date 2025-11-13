@@ -415,27 +415,15 @@ int test_pagetable() {
 // sync user pagetale to process's k_pagetable
 void sync_pagetable(pagetable_t k_pagetable, const pagetable_t pagetable) {
   if (k_pagetable == 0 || pagetable == 0) {
-    panic("sync_pagetable: invalid pagetable");
+    panic("sync_pagetable: pagetable invalid.");
   }
 
   pte_t level2_pgtbl_pte0 = (pte_t)pagetable[0];
-
-  // user pagetable pte 0 should be valid.
-  if (!(level2_pgtbl_pte0 & PTE_V)) {
-    panic("sync_pagetable: user pagetable should be valid.");
-  }
-
   pte_t k_level2_pgtbl_pte0 = (pte_t)k_pagetable[0];
-  // maybe need alloc
-  // 其实一定要（
-  if (!(k_level2_pgtbl_pte0 & PTE_V)) {
-    pagetable_t alloc_pagetable;
-    if ((alloc_pagetable = (pde_t*)kalloc()) == 0) {
-      panic("sync_pagetable: kalloc failed");
-    }
-    memset(alloc_pagetable, 0, PGSIZE);
-    k_pagetable[0] = PA2PTE(alloc_pagetable) | PTE_V;
-    k_level2_pgtbl_pte0 = (pte_t)k_pagetable[0];
+
+  // user pagetable & k_pagetable pte 0 should be valid.
+  if (!(level2_pgtbl_pte0 & PTE_V) || !(k_level2_pgtbl_pte0 & PTE_V)) {
+    panic("sync_pagetable: pte0 invalid.");
   }
   
   pagetable_t k_level1_pagetable = (pagetable_t)PTE2PA(k_level2_pgtbl_pte0);
@@ -446,7 +434,7 @@ void sync_pagetable(pagetable_t k_pagetable, const pagetable_t pagetable) {
 }
 
 // read pte and write to flags_str.
-static inline void get_pte_flags(pte_t *pte, char flags_str[5]) {
+static inline void get_pte_flags(char flags_str[5], const pte_t *pte) {
   flags_str[0] = (*pte & PTE_R) ? 'r' : '-';
   flags_str[1] = (*pte & PTE_W) ? 'w' : '-';
   flags_str[2] = (*pte & PTE_X) ? 'x' : '-';
@@ -454,7 +442,7 @@ static inline void get_pte_flags(pte_t *pte, char flags_str[5]) {
   flags_str[4] = '\0';
 }
 
-static inline void get_vmprint_prefix(int level, char prefix[32]) {
+static inline void get_vmprint_prefix(char prefix[32], int level) {
   switch (level) {
     case 2:
       snprintf(prefix, 31, "||"); break;
@@ -473,7 +461,7 @@ static void vmprintwalk(pagetable_t pgtbl, int level, uint64 va_base) {
     pte_t pte = pgtbl[i];
 
     char prefix[32] = "";
-    get_vmprint_prefix(level, prefix);
+    get_vmprint_prefix(prefix, level);
 
     // 页目录项
     if ((pte & PTE_V) && (pte & (PTE_R|PTE_W|PTE_X)) == 0) {
@@ -490,7 +478,7 @@ static void vmprintwalk(pagetable_t pgtbl, int level, uint64 va_base) {
       // 页表项
       uint64 pa = PTE2PA(pte);
       uint64 va = va_base | ((uint64)i << PXSHIFT(level));
-      char flags_str[5]; get_pte_flags(&pte, flags_str);
+      char flags_str[5]; get_pte_flags(flags_str, &pte);
 
       printf("%sidx: %d: va: %p -> pa: %p, flags: %s\n", prefix, i, va, pa, flags_str);
 
