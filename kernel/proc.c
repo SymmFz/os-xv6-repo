@@ -473,8 +473,6 @@ void scheduler(void) {
     if (found == 0) {
       intr_on();
       asm volatile("wfi");
-
-      vmswitch(kernel_pagetable);
     }
 #else
     ;
